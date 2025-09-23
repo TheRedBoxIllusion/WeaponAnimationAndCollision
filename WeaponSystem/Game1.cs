@@ -26,6 +26,8 @@ namespace WeaponSystem
 
         Player player;
 
+        MouseCollider mc;
+
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
@@ -40,6 +42,8 @@ namespace WeaponSystem
             player = new Player();
 
             itemInHand = new Weapon(animationController, player);
+
+            mc = new MouseCollider();
         }
 
         protected override void Initialize()
@@ -75,9 +79,11 @@ namespace WeaponSystem
                 itemInHand.onLeftClick();
             }
 
+            mc.updateCollider();
+
             if (itemInHand.itemAnimator != null)
             {
-                itemInHand.collisionDetection((player.x, player.y), 1, new Rectangle(Mouse.GetState().X - 5, Mouse.GetState().Y - 5, 10, 10));
+                itemInHand.nonAxisAlignedCollisionDetection((player.x, player.y), -1, mc.collider);
             }
             
 
@@ -91,7 +97,7 @@ namespace WeaponSystem
             GraphicsDevice.Clear(Color.CornflowerBlue);
             _spriteBatch.Begin();
 
-            _spriteBatch.Draw(mouseTexture, new Rectangle(Mouse.GetState().X - 5, Mouse.GetState().Y - 5, 10, 10), Color.White);
+            _spriteBatch.Draw(mouseTexture, new Rectangle(Mouse.GetState().X - 5, Mouse.GetState().Y - 6, 10, 12), Color.White);
 
             _spriteBatch.DrawString(text, Mouse.GetState().X + ", " + Mouse.GetState().Y, new Vector2(200, 50), Color.Red);
 
@@ -144,24 +150,38 @@ namespace WeaponSystem
         }
     }
 
-    public class Weapon : Item {
+    public class Weapon : Item { //, INonAxisAlignedActiveCollider {
 
         bool swungDownwardsLastIteration = false;
 
-        public Vector2 topLeft;
-        public Vector2 topRight;
-        public Vector2 bottomLeft;
-        public Vector2 bottomRight;
+        public Vector2 topLeft { get; set; }
+        public Vector2 topRight { get; set; }
+        public Vector2 bottomLeft { get; set; }
+        public Vector2 bottomRight { get; set; }
 
-        public Vector2[] rotatedPoints;
+        public Vector2[] rotatedPoints { get; set; }
 
-        public Vector2 rotationOrigin;
+        public Vector2 rotationOrigin { get; set; }
+
+        public int colliderWidth { get; set; }
+
+        public int colliderHeight { get; set; }
+
+        public (double x, double y) location { get; set; }
+
+        public Player owner { get; set; }
+
+        public Animator itemAnimator { get; set; }
+
+        public bool isActive { get; set; }
 
         public Weapon(AnimationController ac, Player owner) {
 
             animationController = ac;
 
             this.owner = owner;
+
+            location = (owner.x, owner.y);
 
             constantRotationOffset = -Math.PI / 4;
 
@@ -183,10 +203,12 @@ namespace WeaponSystem
         {
             if (itemAnimator == null)
             {
+                isActive = true;
                 if (!swungDownwardsLastIteration)
                 {
                     spriteEffect = SpriteEffects.None;
                     origin = new Vector2(-2f, 18f);
+                    location = (owner.x - origin.X, owner.y - origin.Y);
                     constantRotationOffset = -Math.PI / 4;
 
                     float initialRotation = (float)-Math.PI / 6;
@@ -201,6 +223,7 @@ namespace WeaponSystem
 
                     spriteEffect = SpriteEffects.FlipVertically;
                     origin = new Vector2(-2f, -2f);
+                    location = (owner.x - origin.X, owner.y - origin.Y);
                     constantRotationOffset = Math.PI / 4;
 
                     float initialRotation = (float)-Math.PI / 6;
@@ -213,11 +236,19 @@ namespace WeaponSystem
             }
         }
 
+        public override void animationFinished()
+        {
+            isActive = false;
+            itemAnimator = null;
+        }
+        
+        ///*
         public void nonAxisAlignedCollisionDetection((double X, double Y) player, int horizontalDirection, Rectangle externalCollider) {
             double theta = itemAnimator.currentPosition.rotation;
             Rectangle externalColliderInLocalSpace = new Rectangle((int)(externalCollider.Center.X - (player.X + horizontalDirection * -origin.X)), (int)(externalCollider.Center.Y - (player.Y - origin.Y)), externalCollider.Width, externalCollider.Height);
             //find the direction of the secondary object and determine which axis to project onto. I can definitely project solely onto an x-y plane given that I'm working with rectangular colliders for now.
             Vector2 seperatingAxis = calculateSeperationAxis(externalColliderInLocalSpace);
+            
             //From the seperating axis, project the collider's shadow onto that axis, then see if there's a gap between the closest points... How shall I do that. Based on the axis, I can tell 
             //The center of the weapon is at 0,0 so that's to note. The seperating axis indicates what corner of the local and external colliders to use. I can take the weapons rectangle, then use a matrix transformation to rotate them, then find the point that has the greatest value along the seperating axis, which is also what it would be like projected, so i can ignore having to do vector dot products and merely take the appropriate component out of the transformed vectors.
             calculateRotation((float)itemAnimator.currentChange.rotation);
@@ -225,17 +256,31 @@ namespace WeaponSystem
             //Multiply the vectors by the seperating axis to get the proj onto that axis, I can then take the largest (or most negative) one and use that for the shadow. But how do I determine if the two shadows are overlapping? I can get the shadow length,
             //I can calculate the distance (based on the externalColliderInLocalSpace) it's shadow is literally just half the dimension in whatever axis, and the distance is the position of the collider in local space.
 
+           
+            
             double shadow = 0;
+            
             for (int i = 0; i < rotatedPoints.Length; i++) {
-                rotatedPoints[i] *= seperatingAxis;
+                Vector2 point = rotatedPoints[i] * seperatingAxis;
                 if (seperatingAxis.X != 0)
                 {
-                    if (shadow < rotatedPoints[i].X) shadow = rotatedPoints[i].X;
+                    if (shadow < point.X) shadow = point.X;
                 }
                 else if (seperatingAxis.Y != 0) {
-                    if (shadow < rotatedPoints[i].Y) shadow = rotatedPoints[i].Y;
+                    if (shadow < point.Y) shadow = point.Y;
                 }
             }
+            
+
+
+            System.Diagnostics.Debug.WriteLine("Distance: " + externalColliderInLocalSpace.X + " * " + seperatingAxis.X);
+            System.Diagnostics.Debug.WriteLine("Shadow: " + shadow + " + " + externalColliderInLocalSpace.Width / 2);
+            System.Diagnostics.Debug.WriteLine("Distance: " + externalColliderInLocalSpace.Y + " * " + seperatingAxis.Y);
+            System.Diagnostics.Debug.WriteLine("Shadow: " + shadow + " + " + externalColliderInLocalSpace.Height / 2);
+
+            System.Diagnostics.Debug.WriteLine("Location: " + player.X + ", " + player.Y);
+            System.Diagnostics.Debug.WriteLine("Collider location: " + externalCollider.X + ", " + externalCollider.Y);
+            
 
             if (seperatingAxis.X != 0)
             {
@@ -266,10 +311,12 @@ namespace WeaponSystem
                     if (externalColliderInLocalSpace.Y - externalColliderInLocalSpace.X > 0)
                     { //Is more below than to the right. So use the y axis to determine collision.
                         seperatingAxis = new Vector2(0, 1);
+                        System.Diagnostics.Debug.WriteLine("One");
                     }
                     else
                     {
                         seperatingAxis = new Vector2(1, 0);
+                        System.Diagnostics.Debug.WriteLine("Two");
                     }
                 }
                 else //Is upwards
@@ -277,10 +324,12 @@ namespace WeaponSystem
                     if (externalColliderInLocalSpace.X + externalColliderInLocalSpace.Y > 0) //More right than up
                     {
                         seperatingAxis = new Vector2(1, 0);
+                        System.Diagnostics.Debug.WriteLine("Three");
                     }
                     else
                     {
                         seperatingAxis = new Vector2(0, -1);
+                        System.Diagnostics.Debug.WriteLine("Four");
                     }
 
                 }
@@ -293,10 +342,12 @@ namespace WeaponSystem
                     if (externalColliderInLocalSpace.Y + externalColliderInLocalSpace.X > 0)
                     { //Is more below than to the left. So use the y axis to determine collision.
                         seperatingAxis = new Vector2(0, 1);
+                        System.Diagnostics.Debug.WriteLine("Funf");
                     }
                     else
                     {
                         seperatingAxis = new Vector2(-1, 0);
+                        System.Diagnostics.Debug.WriteLine("Sechs");
                     }
                 }
                 else //Is upwards
@@ -304,10 +355,12 @@ namespace WeaponSystem
                     if (externalColliderInLocalSpace.X - externalColliderInLocalSpace.Y < 0) //More left than up
                     {
                         seperatingAxis = new Vector2(-1, 0);
+                        System.Diagnostics.Debug.WriteLine("Seben");
                     }
                     else
                     {
                         seperatingAxis = new Vector2(0, -1);
+                        System.Diagnostics.Debug.WriteLine("acht");
                     }
 
                 }
@@ -317,21 +370,25 @@ namespace WeaponSystem
             return seperatingAxis;
         }
 
-        public void calculateRotation(float rotation) {
-
+        public void calculateRotation(float rotation)
+        {
             topLeft = Vector2.RotateAround(topLeft, new Vector2(0, 0), rotation);
             topRight = Vector2.RotateAround(topRight, new Vector2(0, 0), rotation);
             bottomLeft = Vector2.RotateAround(bottomLeft, new Vector2(0, 0), rotation);
             bottomRight = Vector2.RotateAround(bottomRight, new Vector2(0, 0), rotation);
-
-
         }
+        //*/
+
+
 
         private void initialiseColliderVectors(int multiplier, float initialRotation) {
             topLeft = new Vector2(-colliderWidth, -colliderHeight) - rotationOrigin; //The rotation origin doesn't adjust with the origin that is used for drawing. This is because the drawing system and the collision system operate under different grid spacesgit
             topRight = new Vector2(0, -colliderHeight) - rotationOrigin;
             bottomLeft = new Vector2(-colliderWidth, 0) - rotationOrigin;
             bottomRight = new Vector2(0, 0) - rotationOrigin;
+
+            rotatedPoints = new Vector2[] { topLeft, topRight, bottomLeft, bottomRight };
+
 
             topLeft *= multiplier;
             topRight *= multiplier;
@@ -340,6 +397,7 @@ namespace WeaponSystem
 
             calculateRotation(initialRotation);
         }
+        
     }
 
     public class Animator {
@@ -440,10 +498,25 @@ namespace WeaponSystem
         public int y = 50;
     }
 
+    public class MouseCollider : IPassiveCollider {
+        public Rectangle collider { get; set; }
+        public bool isActive { get; set; }
+
+        public MouseCollider() {
+            isActive = true;
+            updateCollider();
+        }
+
+        public void updateCollider() {
+            collider = new Rectangle(Mouse.GetState().X - 5, Mouse.GetState().Y - 6, 10, 12);
+        }
+
+    }
+
 
     public interface ICollider {
         bool isActive { get; set; }
-        Object owner { get; set; } //I need to figure out what the 'owner' should be. I just need it to be one of several classes. Such as a weapon or whatever. Hmm
+    
 
         public void onCollision(ICollider otherCollider) {
         
@@ -452,7 +525,13 @@ namespace WeaponSystem
 
     public interface IActiveCollider : ICollider {
 
-        bool isAxisAligned { get; set; }
+        Player owner { get; set; }
+        public virtual void calculateCollision(IPassiveCollider externalCollider) {
+        
+        }
+    }
+
+    public interface INonAxisAlignedActiveCollider : IActiveCollider {
 
         public Vector2 topLeft { get; set; }
         public Vector2 topRight { get; set; }
@@ -461,20 +540,34 @@ namespace WeaponSystem
 
         public Vector2[] rotatedPoints { get; set; }
 
+        public Vector2 rotationOrigin { get; set; }
+
+        public int colliderWidth { get; set; }
+        public int colliderHeight { get; set; }
+
+        public (double x, double y) location { get; set; }
+
+        public Animator itemAnimator { get; set; }
 
 
-        public void calculateCollision() {
 
-            if (isAxisAligned) {
+        public void calculateCollision(IPassiveCollider externalCollider) {
             
+            if (isActive)
+            {
+                nonAxisAlignedCollisionDetection(externalCollider);
             }
-        
+
         }
 
-        public void nonAxisAlignedCollisionDetection((double X, double Y) player, int horizontalDirection, Rectangle externalCollider)
+        public void nonAxisAlignedCollisionDetection(IPassiveCollider externalCollider)
         {
             double theta = itemAnimator.currentPosition.rotation;
-            Rectangle externalColliderInLocalSpace = new Rectangle((int)(externalCollider.Center.X - (player.X + horizontalDirection * -origin.X)), (int)(externalCollider.Center.Y - (player.Y - origin.Y)), externalCollider.Width, externalCollider.Height);
+            
+
+            Rectangle externalColliderInLocalSpace = new Rectangle((int)(externalCollider.collider.Center.X - location.x), (int)(externalCollider.collider.Center.Y - location.y), externalCollider.collider.Width, externalCollider.collider.Height);
+
+            System.Diagnostics.Debug.WriteLine(location.x + ", " + location.y);
             //find the direction of the secondary object and determine which axis to project onto. I can definitely project solely onto an x-y plane given that I'm working with rectangular colliders for now.
             Vector2 seperatingAxis = calculateSeperationAxis(externalColliderInLocalSpace);
             //From the seperating axis, project the collider's shadow onto that axis, then see if there's a gap between the closest points... How shall I do that. Based on the axis, I can tell 
@@ -497,6 +590,7 @@ namespace WeaponSystem
                     if (shadow < rotatedPoints[i].Y) shadow = rotatedPoints[i].Y;
                 }
             }
+
 
             if (seperatingAxis.X != 0)
             {
@@ -582,33 +676,18 @@ namespace WeaponSystem
 
         public void calculateRotation(float rotation)
         {
-
             topLeft = Vector2.RotateAround(topLeft, new Vector2(0, 0), rotation);
             topRight = Vector2.RotateAround(topRight, new Vector2(0, 0), rotation);
             bottomLeft = Vector2.RotateAround(bottomLeft, new Vector2(0, 0), rotation);
             bottomRight = Vector2.RotateAround(bottomRight, new Vector2(0, 0), rotation);
-
-
         }
 
-        private void initialiseColliderVectors(int multiplier, float initialRotation)
-        {
-            topLeft = new Vector2(-colliderWidth, -colliderHeight) - rotationOrigin; //The rotation origin doesn't adjust with the origin that is used for drawing. This is because the drawing system and the collision system operate under different grid spacesgit
-            topRight = new Vector2(0, -colliderHeight) - rotationOrigin;
-            bottomLeft = new Vector2(-colliderWidth, 0) - rotationOrigin;
-            bottomRight = new Vector2(0, 0) - rotationOrigin;
-
-            topLeft *= multiplier;
-            topRight *= multiplier;
-            bottomRight *= multiplier;
-            bottomLeft *= multiplier;
-
-            calculateRotation(initialRotation);
-        }
 
     }
 
     public interface IPassiveCollider : ICollider {
+
+        Rectangle collider { get; set; }
         //External colliders are colliders that don't compute their own collisions, they only react to collisions. Lets say that monsters have IExternalColliders, when the player collides with the monster, the collision function is run, but the monster doesn't also compute if it collided.
         //I think this will just make it a bit easier to seperate player based colliders from entity colliders. Weapons, including arrows, will have actual colliders that compute collisions with external colliders. This way weapons can 
     } 

@@ -77,7 +77,7 @@ namespace WeaponSystem
 
             if (itemInHand.itemAnimator != null)
             {
-                itemInHand.collisionDetection((player.x, player.y), 1, new Rectangle(Mouse.GetState().X - 5, Mouse.GetState().Y - 5, 10, 10));
+                itemInHand.nonAxisAlignedCollisionDetection((player.x, player.y), 1, new Rectangle(Mouse.GetState().X - 5, Mouse.GetState().Y - 5, 10, 10));
             }
             
 
@@ -97,10 +97,10 @@ namespace WeaponSystem
 
             ///*
 
-            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.topRight.X + player.x - 2), (int)(itemInHand.topRight.Y + player.y - 2), 4, 4), Color.White);
-            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.topLeft.X + player.x - 2), (int)(itemInHand.topLeft.Y + player.y - 2), 4, 4), Color.White);
-            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.bottomRight.X + player.x - 2), (int)(itemInHand.bottomRight.Y + player.y - 2), 4, 4), Color.White);
-            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.bottomLeft.X + player.x - 2), (int)(itemInHand.bottomLeft.Y + player.y - 2), 4, 4), Color.White);
+            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.rotatedPoints[0].X + player.x - 2), (int)(itemInHand.rotatedPoints[0].Y + player.y - 2), 4, 4), Color.White);
+            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.rotatedPoints[1].X + player.x - 2), (int)(itemInHand.rotatedPoints[1].Y + player.y - 2), 4, 4), Color.White);
+            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.rotatedPoints[2].X + player.x - 2), (int)(itemInHand.rotatedPoints[2].Y + player.y - 2), 4, 4), Color.White);
+            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.rotatedPoints[3].X + player.x - 2), (int)(itemInHand.rotatedPoints[3].Y + player.y - 2), 4, 4), Color.White);
             //*/
 
             for (int i = 0; i < animationController.animators.Count; i++)
@@ -148,12 +148,14 @@ namespace WeaponSystem
 
         bool swungDownwardsLastIteration = false;
 
+        /*
         public Vector2 topLeft;
         public Vector2 topRight;
         public Vector2 bottomLeft;
         public Vector2 bottomRight;
+        //*/
 
-        public Vector2[] rotatedPoints;
+        public Vector2[] rotatedPoints = new Vector2[4];
 
         public Vector2 rotationOrigin;
 
@@ -170,8 +172,6 @@ namespace WeaponSystem
             rotationOrigin = new Vector2(-2, 18f);
             sourceDimensions = (16, 16);
             drawDimensions = (32, 32);
-
-            rotatedPoints = new Vector2[] { topLeft, topRight, bottomLeft, bottomRight };
 
 
             colliderWidth = 4;
@@ -227,7 +227,7 @@ namespace WeaponSystem
 
             double shadow = 0;
             for (int i = 0; i < rotatedPoints.Length; i++) {
-                rotatedPoints[i] *= seperatingAxis;
+               
                 if (seperatingAxis.X != 0)
                 {
                     if (shadow < rotatedPoints[i].X) shadow = rotatedPoints[i].X;
@@ -236,6 +236,8 @@ namespace WeaponSystem
                     if (shadow < rotatedPoints[i].Y) shadow = rotatedPoints[i].Y;
                 }
             }
+
+            
 
             if (seperatingAxis.X != 0)
             {
@@ -319,24 +321,26 @@ namespace WeaponSystem
 
         public void calculateRotation(float rotation) {
 
-            topLeft = Vector2.RotateAround(topLeft, new Vector2(0, 0), rotation);
-            topRight = Vector2.RotateAround(topRight, new Vector2(0, 0), rotation);
-            bottomLeft = Vector2.RotateAround(bottomLeft, new Vector2(0, 0), rotation);
-            bottomRight = Vector2.RotateAround(bottomRight, new Vector2(0, 0), rotation);
+            rotatedPoints[0] = Vector2.RotateAround(rotatedPoints[0], new Vector2(0, 0), rotation);
+            rotatedPoints[1] = Vector2.RotateAround(rotatedPoints[1], new Vector2(0, 0), rotation);
+            rotatedPoints[2] = Vector2.RotateAround(rotatedPoints[2], new Vector2(0, 0), rotation);
+            rotatedPoints[3] = Vector2.RotateAround(rotatedPoints[3], new Vector2(0, 0), rotation);
 
 
         }
 
         private void initialiseColliderVectors(int multiplier, float initialRotation) {
-            topLeft = new Vector2(-colliderWidth, -colliderHeight) - rotationOrigin; //The rotation origin doesn't adjust with the origin that is used for drawing. This is because the drawing system and the collision system operate under different grid spacesgit
-            topRight = new Vector2(0, -colliderHeight) - rotationOrigin;
-            bottomLeft = new Vector2(-colliderWidth, 0) - rotationOrigin;
-            bottomRight = new Vector2(0, 0) - rotationOrigin;
+            rotatedPoints[0] = new Vector2(-colliderWidth, -colliderHeight) - rotationOrigin; //The rotation origin doesn't adjust with the origin that is used for drawing. This is because the drawing system and the collision system operate under different grid spacesgit
+            rotatedPoints[1] = new Vector2(0, -colliderHeight) - rotationOrigin;
+            rotatedPoints[2] = new Vector2(-colliderWidth, 0) - rotationOrigin;
+            rotatedPoints[3] = new Vector2(0, 0) - rotationOrigin;
 
-            topLeft *= multiplier;
-            topRight *= multiplier;
-            bottomRight *= multiplier;
-            bottomLeft *= multiplier;
+            rotatedPoints[0] *= multiplier;
+            rotatedPoints[1] *= multiplier;
+            rotatedPoints[2] *= multiplier;
+            rotatedPoints[3] *= multiplier;
+
+            
 
             calculateRotation(initialRotation);
         }
@@ -449,7 +453,7 @@ namespace WeaponSystem
         
         }
     }
-
+    /*
     public interface IActiveCollider : ICollider {
 
         bool isAxisAligned { get; set; }
@@ -612,4 +616,6 @@ namespace WeaponSystem
         //External colliders are colliders that don't compute their own collisions, they only react to collisions. Lets say that monsters have IExternalColliders, when the player collides with the monster, the collision function is run, but the monster doesn't also compute if it collided.
         //I think this will just make it a bit easier to seperate player based colliders from entity colliders. Weapons, including arrows, will have actual colliders that compute collisions with external colliders. This way weapons can 
     } 
+
+    */
 }

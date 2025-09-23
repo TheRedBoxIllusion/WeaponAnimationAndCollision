@@ -83,7 +83,7 @@ namespace WeaponSystem
 
             if (itemInHand.itemAnimator != null)
             {
-                itemInHand.nonAxisAlignedCollisionDetection((player.x, player.y), -1, mc.collider);
+                ((INonAxisAlignedActiveCollider)itemInHand).nonAxisAlignedCollisionDetection(mc);
             }
             
 
@@ -103,10 +103,10 @@ namespace WeaponSystem
 
             ///*
 
-            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.topRight.X + player.x - 2), (int)(itemInHand.topRight.Y + player.y - 2), 4, 4), Color.White);
-            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.topLeft.X + player.x - 2), (int)(itemInHand.topLeft.Y + player.y - 2), 4, 4), Color.White);
-            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.bottomRight.X + player.x - 2), (int)(itemInHand.bottomRight.Y + player.y - 2), 4, 4), Color.White);
-            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.bottomLeft.X + player.x - 2), (int)(itemInHand.bottomLeft.Y + player.y - 2), 4, 4), Color.White);
+            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.rotatedPoints[0].X + player.x - 2), (int)(itemInHand.rotatedPoints[0].Y + player.y - 2), 4, 4), Color.White);
+            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.rotatedPoints[1].X + player.x - 2), (int)(itemInHand.rotatedPoints[1].Y + player.y - 2), 4, 4), Color.White);
+            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.rotatedPoints[2].X + player.x - 2), (int)(itemInHand.rotatedPoints[2].Y + player.y - 2), 4, 4), Color.White);
+            _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(itemInHand.rotatedPoints[3].X + player.x - 2), (int)(itemInHand.rotatedPoints[3].Y + player.y - 2), 4, 4), Color.White);
             //*/
 
             for (int i = 0; i < animationController.animators.Count; i++)
@@ -150,14 +150,9 @@ namespace WeaponSystem
         }
     }
 
-    public class Weapon : Item { //, INonAxisAlignedActiveCollider {
+    public class Weapon : Item, INonAxisAlignedActiveCollider {
 
         bool swungDownwardsLastIteration = false;
-
-        public Vector2 topLeft { get; set; }
-        public Vector2 topRight { get; set; }
-        public Vector2 bottomLeft { get; set; }
-        public Vector2 bottomRight { get; set; }
 
         public Vector2[] rotatedPoints { get; set; }
 
@@ -191,7 +186,7 @@ namespace WeaponSystem
             sourceDimensions = (16, 16);
             drawDimensions = (32, 32);
 
-            rotatedPoints = new Vector2[] { topLeft, topRight, bottomLeft, bottomRight };
+            rotatedPoints = new Vector2[4];
 
 
             colliderWidth = 4;
@@ -242,7 +237,7 @@ namespace WeaponSystem
             itemAnimator = null;
         }
         
-        ///*
+        /*
         public void nonAxisAlignedCollisionDetection((double X, double Y) player, int horizontalDirection, Rectangle externalCollider) {
             double theta = itemAnimator.currentPosition.rotation;
             Rectangle externalColliderInLocalSpace = new Rectangle((int)(externalCollider.Center.X - (player.X + horizontalDirection * -origin.X)), (int)(externalCollider.Center.Y - (player.Y - origin.Y)), externalCollider.Width, externalCollider.Height);
@@ -382,20 +377,19 @@ namespace WeaponSystem
 
 
         private void initialiseColliderVectors(int multiplier, float initialRotation) {
-            topLeft = new Vector2(-colliderWidth, -colliderHeight) - rotationOrigin; //The rotation origin doesn't adjust with the origin that is used for drawing. This is because the drawing system and the collision system operate under different grid spacesgit
-            topRight = new Vector2(0, -colliderHeight) - rotationOrigin;
-            bottomLeft = new Vector2(-colliderWidth, 0) - rotationOrigin;
-            bottomRight = new Vector2(0, 0) - rotationOrigin;
-
-            rotatedPoints = new Vector2[] { topLeft, topRight, bottomLeft, bottomRight };
+            rotatedPoints[0] = new Vector2(-colliderWidth, -colliderHeight) - rotationOrigin; //The rotation origin doesn't adjust with the origin that is used for drawing. This is because the drawing system and the collision system operate under different grid spacesgit
+            rotatedPoints[1] = new Vector2(0, -colliderHeight) - rotationOrigin;
+            rotatedPoints[2] = new Vector2(-colliderWidth, 0) - rotationOrigin;
+            rotatedPoints[3] = new Vector2(0, 0) - rotationOrigin;
 
 
-            topLeft *= multiplier;
-            topRight *= multiplier;
-            bottomRight *= multiplier;
-            bottomLeft *= multiplier;
 
-            calculateRotation(initialRotation);
+            rotatedPoints[0] *= multiplier;
+            rotatedPoints[1] *= multiplier;
+            rotatedPoints[2] *= multiplier;
+            rotatedPoints[3] *= multiplier;
+
+            ((INonAxisAlignedActiveCollider)this).calculateRotation(initialRotation);
         }
         
     }
@@ -533,11 +527,6 @@ namespace WeaponSystem
 
     public interface INonAxisAlignedActiveCollider : IActiveCollider {
 
-        public Vector2 topLeft { get; set; }
-        public Vector2 topRight { get; set; }
-        public Vector2 bottomLeft { get; set; }
-        public Vector2 bottomRight { get; set; }
-
         public Vector2[] rotatedPoints { get; set; }
 
         public Vector2 rotationOrigin { get; set; }
@@ -567,7 +556,7 @@ namespace WeaponSystem
 
             Rectangle externalColliderInLocalSpace = new Rectangle((int)(externalCollider.collider.Center.X - location.x), (int)(externalCollider.collider.Center.Y - location.y), externalCollider.collider.Width, externalCollider.collider.Height);
 
-            System.Diagnostics.Debug.WriteLine(location.x + ", " + location.y);
+            
             //find the direction of the secondary object and determine which axis to project onto. I can definitely project solely onto an x-y plane given that I'm working with rectangular colliders for now.
             Vector2 seperatingAxis = calculateSeperationAxis(externalColliderInLocalSpace);
             //From the seperating axis, project the collider's shadow onto that axis, then see if there's a gap between the closest points... How shall I do that. Based on the axis, I can tell 
@@ -580,7 +569,7 @@ namespace WeaponSystem
             double shadow = 0;
             for (int i = 0; i < rotatedPoints.Length; i++)
             {
-                rotatedPoints[i] *= seperatingAxis;
+                
                 if (seperatingAxis.X != 0)
                 {
                     if (shadow < rotatedPoints[i].X) shadow = rotatedPoints[i].X;
@@ -590,6 +579,8 @@ namespace WeaponSystem
                     if (shadow < rotatedPoints[i].Y) shadow = rotatedPoints[i].Y;
                 }
             }
+
+            
 
 
             if (seperatingAxis.X != 0)
@@ -676,10 +667,10 @@ namespace WeaponSystem
 
         public void calculateRotation(float rotation)
         {
-            topLeft = Vector2.RotateAround(topLeft, new Vector2(0, 0), rotation);
-            topRight = Vector2.RotateAround(topRight, new Vector2(0, 0), rotation);
-            bottomLeft = Vector2.RotateAround(bottomLeft, new Vector2(0, 0), rotation);
-            bottomRight = Vector2.RotateAround(bottomRight, new Vector2(0, 0), rotation);
+            rotatedPoints[0] = Vector2.RotateAround(rotatedPoints[0], new Vector2(0, 0), rotation);
+            rotatedPoints[1] = Vector2.RotateAround(rotatedPoints[1], new Vector2(0, 0), rotation);
+            rotatedPoints[2] = Vector2.RotateAround(rotatedPoints[2], new Vector2(0, 0), rotation);
+            rotatedPoints[3] = Vector2.RotateAround(rotatedPoints[3], new Vector2(0, 0), rotation);
         }
 
 

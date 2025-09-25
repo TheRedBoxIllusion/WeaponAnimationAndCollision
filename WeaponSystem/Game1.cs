@@ -84,6 +84,7 @@ namespace WeaponSystem
             if (itemInHand.itemAnimator != null)
             {
                 ((INonAxisAlignedActiveCollider)itemInHand).nonAxisAlignedCollisionDetection(mc);
+                
             }
             
 
@@ -99,7 +100,17 @@ namespace WeaponSystem
 
             _spriteBatch.Draw(mouseTexture, new Rectangle(Mouse.GetState().X - 5, Mouse.GetState().Y - 6, 10, 12), Color.White);
 
-            _spriteBatch.DrawString(text, Mouse.GetState().X + ", " + Mouse.GetState().Y, new Vector2(200, 50), Color.Red);
+            _spriteBatch.DrawString(text, Mouse.GetState().X + ", " + Mouse.GetState().Y, new Vector2(300, 50), Color.Red);
+
+            if(Mouse.GetState().LeftButton == ButtonState.Pressed)
+            {
+                _spriteBatch.DrawString(text, "Clicked!", new Vector2(300, 75), Color.Red);
+            }
+
+            if (itemInHand.hasCollided) {
+                _spriteBatch.DrawString(text, "Collided", new Vector2(300, 100), Color.Red);
+            }
+
 
             ///*
 
@@ -169,6 +180,8 @@ namespace WeaponSystem
         public Animator itemAnimator { get; set; }
 
         public bool isActive { get; set; }
+
+        public bool hasCollided { get; set; }
 
         public Weapon(AnimationController ac, Player owner) {
 
@@ -431,6 +444,7 @@ namespace WeaponSystem
 
         public void tick(double elapsedTime)
         {
+            
             duration += elapsedTime;
             this.elapsedTime = elapsedTime;
             if (duration >= maxDuration)
@@ -538,6 +552,8 @@ namespace WeaponSystem
 
         public Animator itemAnimator { get; set; }
 
+        public bool hasCollided { get; set; }
+
 
 
         public void calculateCollision(IPassiveCollider externalCollider) {
@@ -551,6 +567,7 @@ namespace WeaponSystem
 
         public void nonAxisAlignedCollisionDetection(IPassiveCollider externalCollider)
         {
+            hasCollided = false;
             double theta = itemAnimator.currentPosition.rotation;
             
 
@@ -589,6 +606,7 @@ namespace WeaponSystem
                 {
                     //Has collided
                     System.Diagnostics.Debug.WriteLine("Collided in the X axis");
+                    hasCollided = true;
                 }
             }
             else if (seperatingAxis.Y != 0)
@@ -597,6 +615,7 @@ namespace WeaponSystem
                 {
                     //Has collided
                     System.Diagnostics.Debug.WriteLine("Collided in the Y axis");
+                    hasCollided = true;
                 }
             }
 

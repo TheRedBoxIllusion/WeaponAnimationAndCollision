@@ -79,12 +79,20 @@ namespace WeaponSystem
                 itemInHand.onLeftClick();
             }
 
-            mc.updateCollider();
+            if (Keyboard.GetState().IsKeyDown(Keys.D))
+            {
+                player.direction = 1;
+            }
+            else if (Keyboard.GetState().IsKeyDown(Keys.A)) {
+                player.direction = -1;
+            }
+
+
+                mc.updateCollider();
 
             if (itemInHand.itemAnimator != null)
             {
                 ((INonAxisAlignedActiveCollider)itemInHand).nonAxisAlignedCollisionDetection(mc);
-                
             }
             
 
@@ -122,11 +130,33 @@ namespace WeaponSystem
 
             for (int i = 0; i < animationController.animators.Count; i++)
             {
-                
+
                 Animator a = animationController.animators[i];
                 Item owner = a.owner;
+
+                SpriteEffects directionEffect = SpriteEffects.None;
+
+                if (owner.owner.direction < 0) { directionEffect = SpriteEffects.FlipHorizontally; }
+
+                //The origin must change  to account for the width and height of the original sprite.
+                //When a SpriteEffect flips the image, it flips it before rotating it, so the origin must swap sides of the image when the image itself is flipped to stay in the same spot relative to a feature in the image.
+                //The rotation also occurs before scaling it to fit the destination rectangle, hence why sourceDimensions are used instead of drawDimensions.
+                int rotationXOffset = 0;
+                int rotationYOffset = 0;
+                if (owner.owner.direction < 0) {
+                    //If the item is facing towards the negative x, account for flipping the image
+                    rotationXOffset = owner.owner.direction * owner.sourceDimensions.width;
+                }
+                if (owner.verticalDirection < 0) {
+                    //If the item is facing towards negative y, account for flipping the image
+                    rotationYOffset = owner.verticalDirection * owner.sourceDimensions.height;
+                }
+                Vector2 origin = new Vector2(owner.owner.direction * owner.origin.X - rotationXOffset, owner.verticalDirection * owner.origin.Y - rotationYOffset);
                 
-                _spriteBatch.Draw(spriteSheets[owner.spriteSheetID], new Rectangle((int)(player.x + a.currentPosition.xPos), (int)(player.y + a.currentPosition.yPos), (int)(owner.drawDimensions.width), (int)(owner.drawDimensions.height)), new Rectangle((int)owner.spriteSheetLocation.x, (int)owner.spriteSheetLocation.y, owner.sourceDimensions.width, owner.sourceDimensions.height), Color.White, (float)a.currentPosition.rotation, owner.origin, owner.spriteEffect, 0f);
+                _spriteBatch.Draw(spriteSheets[owner.spriteSheetID], new Rectangle((int)(player.x + a.currentPosition.xPos), (int)(player.y + a.currentPosition.yPos), (int)(owner.drawDimensions.width), (int)(owner.drawDimensions.height)), new Rectangle((int)owner.spriteSheetLocation.x, (int)owner.spriteSheetLocation.y, owner.sourceDimensions.width, owner.sourceDimensions.height), Color.White, (float)(owner.owner.direction * (a.currentPosition.rotation)), origin, owner.spriteEffect | directionEffect, 0f);
+
+                _spriteBatch.Draw(boundingBoxTexture, new Rectangle((int)(player.x + owner.origin.X - 2), (int)(player.x + owner.origin.Y - 2), 4, 4), Color.White);
+                
             }
             _spriteBatch.End();
 
@@ -139,21 +169,23 @@ namespace WeaponSystem
         public int spriteSheetID;
         public (int width, int height) sourceDimensions;
         public (int width, int height) drawDimensions;
-        public Animator itemAnimator;
-        public AnimationController animationController;
+        public Animator itemAnimator { get; set; }
+        public AnimationController animationController { get; set; }
         public Vector2 origin;
         public double constantRotationOffset;
 
         public SpriteEffects spriteEffect;
 
-        public int colliderWidth;
-        public int colliderHeight;
+        public int colliderWidth { get; set; }
+        public int colliderHeight { get; set; }
 
         public Vector2 offsetFromEntity;
 
-        public Player owner;
+        public int verticalDirection = 1;
 
+        public Player owner { get; set; }
        
+
 
         public virtual void onLeftClick() {}
         public virtual void animationFinished() {
@@ -167,21 +199,17 @@ namespace WeaponSystem
 
         public Vector2[] rotatedPoints { get; set; }
 
+        public Vector2[] originalPoints { get; set; }
+
         public Vector2 rotationOrigin { get; set; }
 
-        public int colliderWidth { get; set; }
-
-        public int colliderHeight { get; set; }
-
         public (double x, double y) location { get; set; }
-
-        public Player owner { get; set; }
-
-        public Animator itemAnimator { get; set; }
 
         public bool isActive { get; set; }
 
         public bool hasCollided { get; set; }
+
+       
 
         public Weapon(AnimationController ac, Player owner) {
 
@@ -200,11 +228,13 @@ namespace WeaponSystem
             drawDimensions = (32, 32);
 
             rotatedPoints = new Vector2[4];
+            originalPoints = new Vector2[4];
 
 
             colliderWidth = 4;
             colliderHeight = 32;
 
+            
         }
         //Adjusted to define the rectangular vertices only once, this should be a bit more efficient
         public override void onLeftClick()
@@ -215,12 +245,12 @@ namespace WeaponSystem
                 if (!swungDownwardsLastIteration)
                 {
                     spriteEffect = SpriteEffects.None;
-                    origin = new Vector2(-2f, 18f);
+                    verticalDirection = 1;
                     location = (owner.x - origin.X, owner.y - origin.Y);
                     constantRotationOffset = -Math.PI / 4;
 
-                    float initialRotation = (float)-Math.PI / 6;
-                    itemAnimator = new Animator(animationController, this, 0.4, (0, 0, initialRotation), (0, 0, 2 * Math.PI / 3), constantRotationOffset);
+                    float initialRotation = (float)Math.PI/6;
+                    itemAnimator = new Animator(animationController, this, 2, (0, 0, initialRotation), (0, 0, initialRotation), constantRotationOffset);
                     swungDownwardsLastIteration = true;
 
                     initialiseColliderVectors(1, initialRotation);
@@ -230,7 +260,7 @@ namespace WeaponSystem
                 else {
 
                     spriteEffect = SpriteEffects.FlipVertically;
-                    origin = new Vector2(-2f, -2f);
+                    verticalDirection = -1;
                     location = (owner.x - origin.X, owner.y - origin.Y);
                     constantRotationOffset = Math.PI / 4;
 
@@ -390,19 +420,25 @@ namespace WeaponSystem
 
 
         private void initialiseColliderVectors(int multiplier, float initialRotation) {
-            rotatedPoints[0] = new Vector2(-colliderWidth, -colliderHeight) - rotationOrigin; //The rotation origin doesn't adjust with the origin that is used for drawing. This is because the drawing system and the collision system operate under different grid spacesgit
-            rotatedPoints[1] = new Vector2(0, -colliderHeight) - rotationOrigin;
-            rotatedPoints[2] = new Vector2(-colliderWidth, 0) - rotationOrigin;
-            rotatedPoints[3] = new Vector2(0, 0) - rotationOrigin;
+            
+            originalPoints[0] = new Vector2(-colliderWidth, -colliderHeight)- rotationOrigin; //The rotation origin doesn't adjust with the origin that is used for drawing. This is because the drawing system and the collision system operate under different grid spacesgit
+            originalPoints[1] = new Vector2(0, -colliderHeight) - rotationOrigin;
+            originalPoints[2] = new Vector2(-colliderWidth, 0) - rotationOrigin;
+            originalPoints[3] = new Vector2(0, 0) - rotationOrigin;
+
+            originalPoints[0] *= multiplier;
+            originalPoints[1] *= multiplier;
+            originalPoints[2] *= multiplier;
+            originalPoints[3] *= multiplier;
 
 
+            //Initialise the rotated points a
+            rotatedPoints[0] = new Vector2(originalPoints[0].X, originalPoints[0].Y);
+            rotatedPoints[1] = new Vector2(originalPoints[1].X, originalPoints[1].Y);
+            rotatedPoints[2] = new Vector2(originalPoints[2].X, originalPoints[2].Y);
+            rotatedPoints[3] = new Vector2(originalPoints[3].X, originalPoints[3].Y);
 
-            rotatedPoints[0] *= multiplier;
-            rotatedPoints[1] *= multiplier;
-            rotatedPoints[2] *= multiplier;
-            rotatedPoints[3] *= multiplier;
-
-            ((INonAxisAlignedActiveCollider)this).calculateRotation(initialRotation);
+            //((INonAxisAlignedActiveCollider)this).calculateRotation(initialRotation);
         }
         
     }
@@ -418,7 +454,7 @@ namespace WeaponSystem
         public Item owner;
 
         public (double xPos, double yPos, double rotation) currentChange;
-        double constantRotationOffset;
+        public double constantRotationOffset;
         
 
 
@@ -504,6 +540,7 @@ namespace WeaponSystem
     public class Player {
         public double x = 50;
         public int y = 50;
+        public int direction = -1;
     }
 
     public class MouseCollider : IPassiveCollider {
@@ -542,8 +579,10 @@ namespace WeaponSystem
     public interface INonAxisAlignedActiveCollider : IActiveCollider {
 
         public Vector2[] rotatedPoints { get; set; }
+        public Vector2[] originalPoints { get; set; }
 
         public Vector2 rotationOrigin { get; set; }
+        
 
         public int colliderWidth { get; set; }
         public int colliderHeight { get; set; }
@@ -556,7 +595,7 @@ namespace WeaponSystem
 
 
 
-        public void calculateCollision(IPassiveCollider externalCollider) {
+        public virtual void calculateCollision(IPassiveCollider externalCollider) {
             
             if (isActive)
             {
@@ -578,7 +617,7 @@ namespace WeaponSystem
             Vector2 seperatingAxis = calculateSeperationAxis(externalColliderInLocalSpace);
             //From the seperating axis, project the collider's shadow onto that axis, then see if there's a gap between the closest points... How shall I do that. Based on the axis, I can tell 
             //The center of the weapon is at 0,0 so that's to note. The seperating axis indicates what corner of the local and external colliders to use. I can take the weapons rectangle, then use a matrix transformation to rotate them, then find the point that has the greatest value along the seperating axis, which is also what it would be like projected, so i can ignore having to do vector dot products and merely take the appropriate component out of the transformed vectors.
-            calculateRotation((float)itemAnimator.currentChange.rotation);
+            calculateRotation((float)itemAnimator.currentPosition.rotation - (float)itemAnimator.constantRotationOffset);
 
             //Multiply the vectors by the seperating axis to get the proj onto that axis, I can then take the largest (or most negative) one and use that for the shadow. But how do I determine if the two shadows are overlapping? I can get the shadow length,
             //I can calculate the distance (based on the externalColliderInLocalSpace) it's shadow is literally just half the dimension in whatever axis, and the distance is the position of the collider in local space.
@@ -686,10 +725,11 @@ namespace WeaponSystem
 
         public void calculateRotation(float rotation)
         {
-            rotatedPoints[0] = Vector2.RotateAround(rotatedPoints[0], new Vector2(0, 0), rotation);
-            rotatedPoints[1] = Vector2.RotateAround(rotatedPoints[1], new Vector2(0, 0), rotation);
-            rotatedPoints[2] = Vector2.RotateAround(rotatedPoints[2], new Vector2(0, 0), rotation);
-            rotatedPoints[3] = Vector2.RotateAround(rotatedPoints[3], new Vector2(0, 0), rotation);
+            rotation *= owner.direction;
+            rotatedPoints[0] = Vector2.RotateAround(originalPoints[0], new Vector2(0, 0), rotation);
+            rotatedPoints[1] = Vector2.RotateAround(originalPoints[1], new Vector2(0, 0), rotation);
+            rotatedPoints[2] = Vector2.RotateAround(originalPoints[2], new Vector2(0, 0), rotation);
+            rotatedPoints[3] = Vector2.RotateAround(originalPoints[3], new Vector2(0, 0), rotation);
         }
 
 
